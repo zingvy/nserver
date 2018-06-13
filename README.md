@@ -1,6 +1,6 @@
 # nserver
 
-A lightweight and easy to use micro server framework written in Go based on [gnatsd](https://github.com/nats-io/gnatsd)
+A lightweight and easy to use and scaleable micro server framework written in Go based on [gnatsd](https://github.com/nats-io/gnatsd)
 
 # Quickstart
 
