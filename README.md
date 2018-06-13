@@ -73,3 +73,43 @@ id is a server id that specify a single server instance, it's optional and the d
 ```
 By default, the server would response the data by json.Marshal(Result) if you call rc.Json(data), you can response your own data format by call rc.Write(\[\]byte("the response string")) 
 
+# Middleware
+
+nserver support middleware, just follow the code:
+``` go
+
+...
+    s := nserver.New(*app, *id, nats_addr)
+    s.Router("hello", &TestHandler{})
+    s.Use(Log)
+    s.Serving()  
+...
+ 
+ 
+ func Log(rc *nserver.ReqContext, next func()) {
+    start := time.Now()
+    next()
+    end := time.Now()
+
+    delete(rc.Param, "req_id")
+    params := make([]string, 0)
+    for key, v := range rc.Param {
+        params = append(params, fmt.Sprintf("%s=%s", key, v))
+    }
+    parameters := strings.Join(params, "&")
+    f := map[string]interface{}{
+        "app":    rc.App(),
+        "req_id": rc.ID(),
+        "server": rc.ServerID(),
+        "start":  start.UnixNano(),
+        "end":    end.UnixNano(),
+        "elapse": end.Sub(start).Seconds(),
+        "path":   fmt.Sprintf("%s.%s", rc.Module, rc.Method),
+        "params": parameters,
+        "status": rc.Resp.Code,
+        "ext":    strings.Join(rc.ExtLogs(), "|"),
+    }
+    fmt.Println(f)
+  }
+ 
+```
