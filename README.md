@@ -63,7 +63,7 @@ easy! isn't it?
 app is used to specify the micro server name, and it's the prefix in the nats message queue, it's optional and the default value is "nserver"(that means you should request to the queue "nserver.x.xx").
 id is a server id that specify a single server instance, it's optional and the default value is 1
 ```
-2, response format?
+2. response format?
 ``` go
   type Response struct {
     Code   int         `json:"code"`
