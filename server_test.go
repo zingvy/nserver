@@ -1,4 +1,4 @@
-package main
+package nserver
 
 import (
 	"encoding/json"
