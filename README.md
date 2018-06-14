@@ -4,7 +4,7 @@ A lightweight and easy to use and scaleable micro server framework written in Go
 
 # Quickstart
 
-- install and run [gnatsd](https://github.com/nats-io/gnatsd), in this guide the gnatsd address is nats://127.0.0.1:4222
+- install and run [gnatsd](https://github.com/nats-io/gnatsd), in this guide the gnatsd address is `nats://127.0.0.1:4222`
 - edit the server code, and run it by passing `--app=nserver --id=yourserverid`
 ``` go
   type TestHandler struct{}
