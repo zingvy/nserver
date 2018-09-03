@@ -4,26 +4,35 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"net/http"
 )
 
 type ReqContext struct {
 	Param   Params
+	Header  Params
+	Cookie  Params
 	Module  string
 	Method  string
 	Resp    *Response
 	reply   string
 	server  *NServer
-	id      string
 	extLogs []string
+	newCookies []*http.Cookie
 }
 
 type Response struct {
 	Code   int         `json:"code"`
 	Errmsg string      `json:"errmsg"`
 	Result interface{} `json:"result"`
+	Cookie []*http.Cookie `json:"COOKIE,omitempty"`
 }
 
 type Params map[string]interface{}
+
+// by default return string
+func (p Params) Get(key string) string {
+	return p.GetString(key)
+}
 
 func (p Params) GetString(key string) string {
 	if v, ok := p[key]; ok {
@@ -58,10 +67,6 @@ func (rc *ReqContext) App() string {
 	return rc.server.queue
 }
 
-func (rc *ReqContext) ID() string {
-	return rc.id
-}
-
 func (rc *ReqContext) AppendExtLog(l string) {
 	rc.extLogs = append(rc.extLogs, l)
 }
@@ -70,9 +75,16 @@ func (rc *ReqContext) Write(b []byte) {
 	rc.server.nc.Publish(rc.reply, b)
 }
 
-func (rc *ReqContext) Error(code int, result interface{}, errParams map[string]interface{}) {
+func (rc *ReqContext) SetCookie(c *http.Cookie) {
+	rc.newCookies = append(rc.newCookies, c)
+}
+
+func (rc *ReqContext) Error(code int, result interface{}, errorMsg string) {
 	res := NewResponse(code, result)
-	res.Errmsg = fmt.Sprintf("%+v", errParams)
+	res.Errmsg = errorMsg 
+	if len(rc.newCookies) == 0 {
+		res.Cookie = rc.newCookies
+	}
 	rc.Resp = res
 	jsonByte, err := json.Marshal(res)
 	if err != nil {
@@ -82,6 +94,9 @@ func (rc *ReqContext) Error(code int, result interface{}, errParams map[string]i
 
 func (rc *ReqContext) Json(result interface{}) {
 	res := NewResponse(0, result)
+	if len(rc.newCookies) > 0 {
+		res.Cookie = rc.newCookies
+	}
 	rc.Resp = res
 	jsonByte, err := json.Marshal(res)
 	if err != nil {

@@ -17,10 +17,11 @@ type NServer struct {
 	handlers map[string]Handler
 	middles  []MiddleFunc
 	queue    string
+	env      string
 	nc       *nats.Conn
 }
 
-func New(queue, id, nats_addr string) *NServer {
+func New(envSpace, queuePrefix, id, nats_addr string) *NServer {
 	c, err := DialNats(nats_addr)
 	if err != nil {
 		panic("connect to nats error!!!")
@@ -30,13 +31,23 @@ func New(queue, id, nats_addr string) *NServer {
 		id:       id,
 		handlers: map[string]Handler{},
 		middles:  make([]MiddleFunc, 0),
-		queue:    queue,
+		queue:    queuePrefix,
+		env:      envSpace,
 		nc:       c,
 	}
 }
 
 func DialNats(addr string) (*nats.Conn, error) {
-	c, err := nats.Connect(addr)
+	c, err := nats.Connect(addr,
+    	nats.DisconnectHandler(func(_ *nats.Conn) {
+    	    fmt.Printf("Got disconnected!\n")
+    	}),
+    	nats.ReconnectHandler(func(nc *nats.Conn) {
+    	    fmt.Printf("Got reconnected to %v!\n", nc.ConnectedUrl())
+    	}),
+    	nats.ClosedHandler(func(nc *nats.Conn) {
+    	    fmt.Printf("Connection closed. Reason: %q\n", nc.LastError())
+    	}))
 	if err != nil {
 		return nil, err
 	}
@@ -55,26 +66,30 @@ func (s *NServer) Use(funcs ...MiddleFunc) {
 
 func (s *NServer) Serving() {
 	for subj, _ := range s.handlers {
-		subject := s.queue + "." + subj + ".*"
-		q := s.queue + ":" + subj
+		subject := s.env + "." + s.queue + "." + subj + ".*"
+		q := s.env + ":" + s.queue + ":" + subj
 		s.nc.QueueSubscribe(subject, q, func(msg *nats.Msg) {
 			go s.dispatcher(msg)
 		})
 	}
-
 	select {}
 }
 
 type Subject struct {
-	App    string
+	Env    string
+	Queue  string
 	Module string
 	Method string
 }
 
 func parseSubject(subj string) *Subject {
 	n := strings.Split(subj, ".")
-	a, m, act := n[0], n[1], n[2]
-	return &Subject{a, m, act}
+	if len(n) < 4 {
+		panic("invalid subject: " + subj)
+	}
+	env, queue, act := n[0], n[1], n[len(n)-1]
+	module := strings.Join(n[2:len(n)-1], ".")
+	return &Subject{env, queue, module, act}
 }
 
 func (s *NServer) dispatcher(msg *nats.Msg) {
@@ -101,10 +116,14 @@ func (s *NServer) dispatcher(msg *nats.Msg) {
 			rc.Write([]byte(fmt.Sprintf("params should be json format")))
 			return
 		}
-	}
-
-	if req_id := rc.Param.GetString("req_id"); req_id != "" {
-		rc.id = req_id
+		if h, ok := rc.Param["HEADER"]; ok {
+			rc.Header = h.(map[string]interface{})
+			delete(rc.Param, "HEADER")
+		}
+		if cookie, ok := rc.Param["COOKIE"]; ok {
+			rc.Cookie = cookie.(map[string]interface{})
+			delete(rc.Param, "COOKIE")
+		}
 	}
 
 	i := 0
@@ -131,6 +150,7 @@ func (s *NServer) do(rc *ReqContext) {
 		rc.Write([]byte(fmt.Sprintf("method %s not found", rc.Method)))
 		return
 	}
+	
 	args := []reflect.Value{reflect.ValueOf(rc)}
 	action.Call(args)
 }
